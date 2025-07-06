@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signature Tracker Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            padding-top: 50px;
+            background: linear-gradient(135deg, #001f3f 0%, #003d7a 100%);
+            min-height: 100vh;
+            color: #ffffff;
+            margin: 0;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .main-counter {
+            display: inline-flex;
+            font-size: 4em;
+            font-weight: bold;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9ff 100%);
+            border-radius: 15px;
+            padding: 15px 25px;
+            box-shadow: 
+                0 8px 32px rgba(0, 31, 63, 0.3),
+                0 4px 16px rgba(0, 86, 179, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            border: 2px solid #e6f0ff;
+            margin-bottom: 20px;
+        }
+        .digit {
+            position: relative;
+            width: 40px;
+            height: 60px;
+            overflow: hidden;
+            margin: 0 2px;
+            color: #001f3f;
+        }
+        .digit .number-scroll {
+            position: absolute;
+            top: 0;
+            transition: transform 0.3s ease-in-out;
+        }
+        .digit .number-scroll span {
+            display: block;
+            height: 60px;
+            line-height: 50px;
+            color: #001f3f;
+            font-weight: 700;
+        }
+        .comma {
+            width: 20px;
+            text-align: center;
+            line-height: 50px;
+            font-size: 1em;
+            color: #0056b3;
+            font-weight: 600;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 20px;
+            text-align: left;
+        }
+        .sidebar {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .main-content {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            color: #001f3f;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+        .stat-item {
+            background: #f0f7ff;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e6f0ff;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #0056b3;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #001f3f;
+        }
+        .stat-value.positive { color: #28a745; }
+        .stat-value.negative { color: #dc3545; }
+        .chart-container {
+            position: relative;
+            height: 450px;
+            margin-top: 20px;
+        }
+        .status-bar {
+            margin-top: 15px;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .zoom-btn {
+            padding: 8px 12px;
+            border: 1px solid #0056b3;
+            background: #ffffff;
+            color: #0056b3;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.2s ease;
+        }
+        .zoom-btn:hover {
+            background: #f0f7ff;
+            transform: translateY(-1px);
+        }
+        .zoom-hint {
+            color: #6c757d;
+            font-size: 0.8em;
+            font-style: italic;
+            margin-left: auto;
+        }
+         @media (max-width: 900px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            .zoom-hint {
+                margin-left: 0;
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Live Signature Tracker</h1>
+        <div class="main-counter" id="mainCounter"></div>
+
+        <div class="dashboard">
+            <div class="sidebar">
+                <h2>Live Stats</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Growth / Second</span>
+                        <span id="growthPerSecond" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Growth / Minute</span>
+                        <span id="growthPerMinute" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Growth / Day</span>
+                        <span id="growthPerDay" class="stat-value">--</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">July 31st Projection (Simple)</span>
+                        <span id="deadlinePrediction" class="stat-value">--</span>
+                    </div>
+                </div>
+            </div>
+            <div class="main-content">
+                <h2>Signature Trend & Prediction</h2>
+                <div class="chart-controls">
+                    <button id="zoomIn" class="zoom-btn">🔍+ Zoom In</button>
+                    <button id="zoomOut" class="zoom-btn">🔍- Zoom Out</button>
+                    <button id="resetZoom" class="zoom-btn">↺ Reset View</button>
+                    <span class="zoom-hint">Scroll to zoom | Drag to pan</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+                <div class="status-bar">
+                    Status: <span id="statusText">Initializing...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_ENDPOINT = "http://127.0.0.1:8000/api/data";
+        let trendChart = null;
+        let prevDigits = [];
+        let prevNumber = 0;
+        // Track already plotted prediction points to avoid duplicates
+        const arimaSeen = new Set();
+        const sarimaSeen = new Set();
+        
+        // Track user interaction state
+        let userInteracting = false;
+        let interactionTimeout = null;
+
+        function formatNumber(num, decimals = 2) {
+            const sign = num >= 0 ? '+' : '';
+            if (Math.abs(num) > 1000) {
+                return sign + Math.round(num).toLocaleString();
+            }
+            return sign + num.toFixed(decimals);
+        }
+
+        function createDigitElement(digit) {
+            const digitContainer = document.createElement('div');
+            digitContainer.className = 'digit';
+
+            const scroll = document.createElement('div');
+            scroll.className = 'number-scroll';
+
+            // Create multiple sets of numbers for smooth wrap-around animation
+            for (let set = 0; set < 3; set++) {
+                for (let i = 0; i <= 9; i++) {
+                    const span = document.createElement('span');
+                    span.textContent = i;
+                    scroll.appendChild(span);
+                }
+            }
+
+            digitContainer.appendChild(scroll);
+            setDigit(scroll, digit, digit, true); // Initialize without animation
+            return digitContainer;
+        }
+
+        function setDigit(scroll, newValue, oldValue = 0, isInitial = false) {
+            if (isInitial) {
+                // For initial setup, position at the middle set
+                scroll.style.transform = `translateY(-${(newValue + 10) * 60}px)`;
+                scroll.style.transition = 'none';
+                return;
+            }
+
+            const isIncreasing = prevNumber < getCurrentNumber();
+            
+            // Determine the best animation path
+            let targetPosition;
+            
+            if (oldValue === newValue) {
+                return; // No change needed
+            }
+            
+            // Calculate the shortest path considering wrap-around
+            let directPath = newValue - oldValue;
+            
+            // Choose animation direction based on number trend and shortest path
+            if (isIncreasing) {
+                // For increasing numbers, prefer forward/upward movement
+                if (directPath > 0) {
+                    // Normal forward movement (e.g., 3 to 4)
+                    targetPosition = (newValue + 10) * 60;
+                } else {
+                    // Wrap around forward (e.g., 9 to 0)
+                    targetPosition = (newValue + 20) * 60;
+                }
+            } else {
+                // For decreasing numbers, prefer backward/downward movement
+                if (directPath < 0) {
+                    // Normal backward movement (e.g., 4 to 3)
+                    targetPosition = (newValue + 10) * 60;
+                } else {
+                    // Wrap around backward (e.g., 0 to 9)
+                    targetPosition = newValue * 60;
+                }
+            }
+            
+            scroll.style.transition = 'transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1)';
+            scroll.style.transform = `translateY(-${targetPosition}px)`;
+            
+            // Reset position after animation for next transition
+            setTimeout(() => {
+                scroll.style.transition = 'none';
+                scroll.style.transform = `translateY(-${(newValue + 10) * 60}px)`;
+            }, 600);
+        }
+
+        function getCurrentNumber() {
+            return window.currentSignatureCount || 0;
+        }
+
+        function updateCounterDisplay(number) {
+            window.currentSignatureCount = number;
+            const counterContainer = document.getElementById('mainCounter');
+            const str = number.toLocaleString("en-US");
+            const digits = Array.from(str);
+
+            // Clear any existing text content and initialize
+            if (counterContainer.childElementCount === 0) {
+                counterContainer.textContent = ''; // Clear the "--" or any text
+                digits.forEach(char => {
+                    if (char === ',') {
+                        const comma = document.createElement('div');
+                        comma.className = 'comma';
+                        comma.textContent = ',';
+                        counterContainer.appendChild(comma);
+                        prevDigits.push(null);
+                    } else {
+                        const digitEl = createDigitElement(Number(char));
+                        counterContainer.appendChild(digitEl);
+                        prevDigits.push(Number(char));
+                    }
+                });
+            } else {
+                // Handle length changes in the number
+                const prevLength = prevDigits.filter(d => d !== null).length;
+                const newLength = digits.filter(d => d !== ',').length;
+                
+                if (newLength !== prevLength) {
+                    // Rebuild counter if digit count changed
+                    counterContainer.innerHTML = '';
+                    prevDigits = [];
+                    digits.forEach(char => {
+                        if (char === ',') {
+                            const comma = document.createElement('div');
+                            comma.className = 'comma';
+                            comma.textContent = ',';
+                            counterContainer.appendChild(comma);
+                            prevDigits.push(null);
+                        } else {
+                            const digitEl = createDigitElement(Number(char));
+                            counterContainer.appendChild(digitEl);
+                            prevDigits.push(Number(char));
+                        }
+                    });
+                } else {
+                    // Update existing digits
+                    for (let i = 0; i < digits.length; i++) {
+                        const char = digits[i];
+                        if (char === ',') continue;
+
+                        const currentDigit = Number(char);
+                        const containerChild = counterContainer.children[i];
+                        const scroll = containerChild.querySelector('.number-scroll');
+
+                        if (prevDigits[i] !== currentDigit) {
+                            setDigit(scroll, currentDigit, prevDigits[i], false);
+                            prevDigits[i] = currentDigit;
+                        }
+                    }
+                }
+            }
+            
+            prevNumber = number;
+        }
+
+        function updateStats(stats) {
+            updateCounterDisplay(stats.current_count);
+            
+            const perSecondEl = document.getElementById('growthPerSecond');
+            perSecondEl.textContent = formatNumber(stats.per_second_growth, 2);
+            perSecondEl.className = 'stat-value ' + (stats.per_second_growth >= 0 ? 'positive' : 'negative');
+            
+            const perMinuteEl = document.getElementById('growthPerMinute');
+            perMinuteEl.textContent = formatNumber(stats.per_minute_growth, 0);
+            perMinuteEl.className = 'stat-value ' + (stats.per_minute_growth >= 0 ? 'positive' : 'negative');
+            
+            const perDayEl = document.getElementById('growthPerDay');
+            perDayEl.textContent = formatNumber(stats.per_day_growth_rounded, 0);
+            perDayEl.className = 'stat-value ' + (stats.per_day_growth_rounded >= 0 ? 'positive' : 'negative');
+
+            const deadlineEl = document.getElementById('deadlinePrediction');
+            deadlineEl.textContent = Math.round(stats.deadline_prediction).toLocaleString();
+        }
+
+        function updateChart(history, arimaPrediction, sarimaPrediction) {
+            if (!trendChart) {
+                initChart();
+            }
+
+            // Skip updates if user is actively interacting with the chart
+            if (userInteracting) {
+                return;
+            }
+
+            // Actual data (always replace with latest history slice)
+            trendChart.data.datasets[0].data = history.map(p => ({ x: p.time, y: p.count }));
+
+            // Append new ARIMA prediction points if not already plotted
+            arimaPrediction.forEach(pt => {
+                if (!arimaSeen.has(pt.time)) {
+                    trendChart.data.datasets[1].data.push({ x: pt.time, y: pt.count });
+                    arimaSeen.add(pt.time);
+                }
+            });
+
+            // Append new SARIMA prediction points
+            sarimaPrediction.forEach(pt => {
+                if (!sarimaSeen.has(pt.time)) {
+                    trendChart.data.datasets[2].data.push({ x: pt.time, y: pt.count });
+                    sarimaSeen.add(pt.time);
+                }
+            });
+
+            trendChart.update('none');
+        }
+
+        function setUserInteracting(isInteracting) {
+            // Clear any existing timeout
+            if (interactionTimeout) {
+                clearTimeout(interactionTimeout);
+                interactionTimeout = null;
+            }
+            
+            if (isInteracting) {
+                userInteracting = true;
+                // Set a timeout to automatically stop interaction after 1 second of no activity
+                interactionTimeout = setTimeout(() => {
+                    userInteracting = false;
+                    interactionTimeout = null;
+                }, 1000);
+            } else {
+                // Immediately stop interaction but set a brief timeout to prevent flicker
+                interactionTimeout = setTimeout(() => {
+                    userInteracting = false;
+                    interactionTimeout = null;
+                }, 200);
+            }
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            const canvas = ctx.canvas;
+            
+            // Add interaction event listeners to canvas
+            canvas.addEventListener('mousedown', () => setUserInteracting(true));
+            canvas.addEventListener('mouseup', () => setUserInteracting(false));
+            canvas.addEventListener('mousemove', (e) => {
+                if (e.buttons > 0) { // Mouse button is pressed while moving (dragging)
+                    setUserInteracting(true);
+                }
+            });
+            canvas.addEventListener('wheel', () => {
+                setUserInteracting(true);
+                // Auto-resume updates after wheel interaction
+                setTimeout(() => setUserInteracting(false), 500);
+            });
+            canvas.addEventListener('touchstart', () => setUserInteracting(true));
+            canvas.addEventListener('touchend', () => setUserInteracting(false));
+            canvas.addEventListener('touchmove', () => setUserInteracting(true));
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Actual Signatures',
+                        data: [],
+                        borderColor: '#0056b3',
+                        backgroundColor: 'rgba(0, 86, 179, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: true,
+                        order: 1
+                    }, {
+                        label: 'ARIMA Prediction',
+                        data: [],
+                        borderColor: '#28a745',
+                        borderDash: [3, 3],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: false,
+                        order: 2
+                    }, {
+                        label: 'SARIMA Prediction',
+                        data: [],
+                        borderColor: '#ff8c00',
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: false,
+                        order: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        zoom: {
+                            limits: {
+                                x: {min: 'original', max: 'original'},
+                                y: {min: 'original', max: 'original'}
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'xy',
+                                modifierKey: null // Remove ctrl requirement for dragging
+                            },
+                                                                                      zoom: {
+                                 wheel: {
+                                     enabled: true,
+                                     modifierKey: null // No modifier key required - just scroll to zoom
+                                 },
+                                 drag: {
+                                     enabled: false // Disable drag-select zoom to avoid conflict with pan
+                                 },
+                                 pinch: {
+                                     enabled: true
+                                 },
+                                 mode: 'xy'
+                             }
+                         },
+
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            type: 'time', 
+                            time: { unit: 'hour' },
+                            title: {
+                                display: true,
+                                text: 'Time (Scroll to zoom, Drag to pan)'
+                            }
+                        },
+                        y: { 
+                            ticks: { callback: value => value.toLocaleString() },
+                            title: {
+                                display: true,
+                                text: 'Signatures'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function fetchData() {
+            const statusEl = document.getElementById('statusText');
+            try {
+                // statusEl.textContent = "Fetching latest data...";
+                const response = await fetch(API_ENDPOINT);
+                if (!response.ok) {
+                    throw new Error(`Server returned an error: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                updateStats(data.stats);
+                updateChart(data.history, data.arima_prediction, data.sarima_prediction);
+                
+                const now = new Date();
+                statusEl.textContent = `Data updated at ${now.toLocaleTimeString()}.`;
+
+            } catch (error) {
+                console.error("Failed to fetch data:", error);
+                statusEl.textContent = `Error: ${error.message}. Is the server running?`;
+            }
+        }
+
+        // Zoom control functions
+        function setupZoomControls() {
+            document.getElementById('zoomIn').addEventListener('click', () => {
+                if (trendChart) trendChart.zoom(1.2);
+            });
+
+            document.getElementById('zoomOut').addEventListener('click', () => {
+                if (trendChart) trendChart.zoom(0.8);
+            });
+
+            document.getElementById('resetZoom').addEventListener('click', () => {
+                if (trendChart) trendChart.resetZoom();
+            });
+        }
+
+        // Initial load and periodic refresh
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            setupZoomControls();
+            fetchData();
+            setInterval(fetchData, 2000); // Refresh every 2 seconds
+        });
+
+    </script>
+</body>
+</html> 
