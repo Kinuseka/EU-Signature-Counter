@@ -17,7 +17,7 @@ curl http://localhost:8000/api/data
 ```
 
 ## API Response
-```json
+```js
 {
     'history': [],
     'arima_prediction': [],
@@ -31,6 +31,6 @@ curl http://localhost:8000/api/data
         'per_day_grwoth_rounded': 0,
     },
     'memory_info': [],
-    combined_stats: {...}
+    'combined_stats': {...}
 }
 ```
